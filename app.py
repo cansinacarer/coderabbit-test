@@ -20,41 +20,39 @@ def get_user(user_id):
 
 @app.route("/users/<int:user_id>/transfer", methods=["POST"])
 def transfer(user_id):
-    # Authentication check - verify caller is authorized to debit from user_id
-    # In a real application, extract authenticated_user_id from session/token
-    # For now, we'll use a request header as a placeholder
-    authenticated_user_id = request.headers.get("X-User-ID")
-    if authenticated_user_id is None:
-        return jsonify({"error": "Unauthorized"}), 401
+    # NOTE: In production, this would validate against an authenticated session/token
+    # For now, we add a basic authorization check via a header
+    auth_user_id = request.headers.get("X-User-ID")
+    if auth_user_id is None:
+        return jsonify({"error": "Authentication required"}), 401
     try:
-        authenticated_user_id = int(authenticated_user_id)
+        auth_user_id = int(auth_user_id)
     except ValueError:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Invalid authentication"}), 401
+    if auth_user_id != user_id:
+        return jsonify({"error": "Unauthorized to transfer from this account"}), 403
 
-    if authenticated_user_id != user_id:
-        return jsonify({"error": "Forbidden - cannot transfer from another user's account"}), 403
+    data = request.get_json()
 
     # Input validation
-    data = request.get_json()
     if not isinstance(data, dict):
-        return jsonify({"error": "Bad Request - payload must be a JSON object"}), 400
-
+        return jsonify({"error": "Invalid request payload"}), 400
     if "recipient_id" not in data:
-        return jsonify({"error": "Bad Request - recipient_id is required"}), 400
+        return jsonify({"error": "Missing required field: recipient_id"}), 400
     if "amount" not in data:
-        return jsonify({"error": "Bad Request - amount is required"}), 400
+        return jsonify({"error": "Missing required field: amount"}), 400
 
     try:
         recipient_id = int(data["recipient_id"])
     except (ValueError, TypeError):
-        return jsonify({"error": "Bad Request - recipient_id must be an integer"}), 400
+        return jsonify({"error": "recipient_id must be an integer"}), 400
 
     try:
         amount = float(data["amount"])
         if amount < 0:
-            return jsonify({"error": "Bad Request - amount must be non-negative"}), 400
+            return jsonify({"error": "amount must be non-negative"}), 400
     except (ValueError, TypeError):
-        return jsonify({"error": "Bad Request - amount must be numeric"}), 400
+        return jsonify({"error": "amount must be numeric"}), 400
 
     with users_lock:
         sender = users.get(user_id)
@@ -74,15 +72,15 @@ def transfer(user_id):
 
 @app.route("/users", methods=["POST"])
 def create_user():
-    # Input validation
     data = request.get_json()
-    if not isinstance(data, dict):
-        return jsonify({"error": "Bad Request - payload must be a JSON object"}), 400
 
+    # Input validation
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request payload"}), 400
     if "name" not in data:
-        return jsonify({"error": "Bad Request - name is required"}), 400
+        return jsonify({"error": "Missing required field: name"}), 400
     if "email" not in data:
-        return jsonify({"error": "Bad Request - email is required"}), 400
+        return jsonify({"error": "Missing required field: email"}), 400
 
     with users_lock:
         new_id = max(users.keys()) + 1
