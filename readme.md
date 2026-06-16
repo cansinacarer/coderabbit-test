@@ -1,0 +1,1 @@
+test repository with an intentionally buggy flask app to see how coderabbit.ai performs.
